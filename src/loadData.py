@@ -59,7 +59,7 @@ class GenerateWordEmbeddings(object):
         args:
             sample (string): sentence to be converted into list of word embeddings
         """
-        token_list = self.__tokenize(sample)
+        token_list = self._tokenize(sample)
 
         sentence_embedding = []
         for word in token_list:
@@ -71,7 +71,7 @@ class GenerateWordEmbeddings(object):
 
         return sentence_embedding
 
-    def __tokenize(self, string):
+    def _tokenize(self, string):
         tokens = string.split(sep=" ")
         punctuation = [" ", ".", ",", ".\n"]
 
