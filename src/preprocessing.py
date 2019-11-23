@@ -1,12 +1,13 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, ConcatDataset
 from torchvision import transforms, utils
 import numpy as np
 
-class sentencesDataset(Dataset):
-    def __init__(self, text_file, root_dir, transform=None):
+class LabeledSentencesDataset(Dataset):
+    def __init__(self, label, text_file, root_dir, transform=None):
         """
         Args:
+            label (int): Label to be applied to all samples (0,1)
             text_file (string): Path to the csv file with annotations.
             root_dir (string): Directory with all the data
             transform (callable, optional): Optional transform to be applied
@@ -14,6 +15,7 @@ class sentencesDataset(Dataset):
         """
         self.root_dir = root_dir
         self.transform = transform
+        self.label = label
 
         with open(text_file, "r") as f:
             self.sentences = f.readlines()
@@ -27,7 +29,10 @@ class sentencesDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
-        return sample
+        return (sample, label)
+
+    def __len__(self):
+        return len(self.sentences)
 
 
 class GenerateWordEmbeddings(object):
@@ -81,3 +86,22 @@ class GenerateWordEmbeddings(object):
                 tokens_clean.append(t)
 
         return tokens_clean
+
+def load_data():
+    train_batch_size = 32
+
+    yelp_train_0 = LabeledSentencesDataset(0, "../data/yelp/sentiment.train.0", "../data/yelp/",
+                            transform=GenerateWordEmbeddings(200, "../data/glove.6B/"))
+    yelp_train_1 = LabeledSentencesDataset(1, "../data/yelp/sentiment.train.1", "../data/yelp/",
+                            transform=GenerateWordEmbeddings(200, "../data/glove.6B/"))
+
+
+    yelp_train = ConcatDataset([yelp_train_0, yelp_train_1])
+
+    train_loader = DataLoader(yelp_train,
+                                                       batch_size=train_batch_size,
+                                                       shuffle=True, **kwargs)
+    return train_loader
+
+if __name__ == "__main__":
+    load_data()

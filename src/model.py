@@ -1,38 +1,39 @@
 import torch
+import numpy as np
+from torch.autograd import Variable
+#import torch.nn as nn
+from torch import nn
+import torch.nn.functional as F
+import torch.optim as optim
+from preprocessing import load_data
+
+X_dim = 0
+N = 0
 
 class StyleEncoder(nn.Module):
     def __init__(self):
         super(StyleEncoder, self).__init__()
         self.lin1 = nn.Linear(X_dim, N)
-        self.lin2 = nn.Linear(N, N)
-        # Gaussian code (z)
-        self.lin3gauss = nn.Linear(N, z_dim)
-
-    def forward(self, x):
-        x = F.dropout(self.lin1(x), p=0.2, training=self.training)
-        x = F.relu(x)
-        x = F.dropout(self.lin2(x), p=0.2, training=self.training)
-        x = F.relu(x)
-        xgauss = self.lin3gauss(x)
-
-        return xgauss
-
-
-class ContentEncoder(nn.Module):
-    def __init__(self):
-        super(ContentEncoder, self).__init__()
-        self.lin1 = nn.Linear(z_dim + n_classes, N)
-        self.lin2 = nn.Linear(N, N)
-        self.lin3 = nn.Linear(N, X_dim)
 
     def forward(self, x):
         x = self.lin1(x)
         x = F.dropout(x, p=0.2, training=self.training)
         x = F.relu(x)
-        x = self.lin2(x)
+        x = F.sigmoid(x)
+        return x
+
+
+class ContentEncoder(nn.Module):
+    def __init__(self):
+        super(ContentEncoder, self).__init__()
+        self.lin1 = nn.Linear(X_dim, N)
+
+    def forward(self, x):
+        x = self.lin1(x)
         x = F.dropout(x, p=0.2, training=self.training)
-        x = self.lin3(x)
-        return F.sigmoid(x)
+        x = F.relu(x)
+        x = F.sigmoid(x)
+        return x
 
 
 class Generator(nn.Module):
@@ -40,12 +41,14 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
 
     def forward(self, x, y):
-        return 
+
+        return
 
 
-def train():
-    num_epochs = 100
-    batch_size = 128
+
+def train(train_loader):
+    num_epochs = 10
+    #batch_size = 128
     learning_rate = 1e-3
     weight_decay = 1e-5
 
@@ -62,16 +65,29 @@ def train():
                 ], lr=learning_rate, weight_decay=weight_decay)
 
     for epoch in range(num_epochs):
-        for data in train_loader:
-            sentence = Variable()
-
+        for sentence, label in train_loader:
+            X = Variable(sentence).cuda()
+            # ===================forward=====================
             latent_content = content_encoder()
             latent_style = style_encoder()
             output = generator()
+            loss = criterion(output, X)
+            # ===================backward====================
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # ===================log========================
+        print('epoch [{}/{}], loss:{:.4f}'
+              .format(epoch + 1, num_epochs, loss.data[0]))
+        if epoch % 10 == 0:
+            pic = to_img(output.cpu().data)
+            save_image(pic, './mlp_img/image_{}.png'.format(epoch))
 
 
 if __name__ == "__main__":
-    train()
+    train_loader = load_data()
+    train(train_loader)
 
 
 #
