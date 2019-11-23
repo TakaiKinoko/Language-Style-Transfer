@@ -24,16 +24,27 @@ class StyleEncoder(nn.Module):
 
 
 class ContentEncoder(nn.Module):
-    def __init__(self):
+        '''
+        A GRU net as the content encoder E_z.
+        Parameters:
+            Input_dimension: 200, dimension of the word embedding.
+            Hidden_dimension: 1000, dimension of the content representation.
+            Dropout rate: 0.5
+    '''
+    def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
-        self.lin1 = nn.Linear(X_dim, N)
+        self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
+        #self.lin1 = nn.Linear(X_dim, N)
+        
 
     def forward(self, x):
-        x = self.lin1(x)
-        x = F.dropout(x, p=0.2, training=self.training)
-        x = F.relu(x)
-        x = F.sigmoid(x)
-        return x
+        out, h = self.gru(x, h)
+        return out, h
+        #x = self.lin1(x)
+        #x = F.dropout(x, p=0.2, training=self.training)
+        #x = F.relu(x)
+        #x = F.sigmoid(x)
+        #return x
 
 
 class Generator(nn.Module):
