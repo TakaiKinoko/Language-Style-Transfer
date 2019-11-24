@@ -20,19 +20,17 @@ class styleEncoder(nn.Module):
     GPU dropout probability: 0.5
     filter size: 200 * {1, 2, 3, 4, 5} with 100 feature maps each
     '''
+
     def __init__(self, V, D=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
+        '''
+        V: number of embeddings (vocabulary size)
+        D: embeddings dimension
+        C: number of classes
+        Ci: number of in_channels
+        Co: number of kernels
+        Ks: list of kernel sizes 
+        '''
         super(styleEncoder, self).__init__()
-        
-        """
-        self.args = args
-        
-        V = args.embed_num      
-        D = args.embed_dim    # 200 
-        C = args.class_num    # 2 
-        Ci = 1
-        Co = args.kernel_num  # 100 
-        Ks = args.kernel_sizes  # {1, 2, 3, 4, 5}
-        """
 
         self.embed = nn.Embedding(V, D)
         self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])
