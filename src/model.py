@@ -27,8 +27,9 @@ class styleEncoder(nn.Module):
         D: embeddings dimension
         C: number of classes
         Ci: number of in_channels
-        Co: number of kernels
+        Co: number of kernels (here: number of feature maps for each kernel size)
         Ks: list of kernel sizes 
+        dropout: dropout rate
         '''
         super(styleEncoder, self).__init__()
 
