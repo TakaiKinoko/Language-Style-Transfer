@@ -46,8 +46,8 @@ class styleEncoder(nn.Module):
     def forward(self, x):
         x = self.embed(x)  # (N, W, D)
         
-        if self.args.static:
-            x = Variable(x)
+        #if self.args.static:   # baseline model with only a static channel
+        #    x = Variable(x)
 
         x = x.unsqueeze(1)  # (N, Ci, W, D)
 
