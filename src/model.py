@@ -10,7 +10,7 @@ from preprocessing import load_data
 X_dim = 0
 N = 0
 
-class styleEncoder(nn.Module):
+class StyleEncoder(nn.Module):
     '''
     ARCHITECTURE: 
         conv layer -- max pooling -- fully connected layer
@@ -31,7 +31,7 @@ class styleEncoder(nn.Module):
         Ks: list of kernel sizes 
         dropout: dropout rate
         '''
-        super(styleEncoder, self).__init__()
+        super(StyleEncoder, self).__init__()
 
         self.embed = nn.Embedding(V, D)
         self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])

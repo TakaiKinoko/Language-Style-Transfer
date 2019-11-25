@@ -25,7 +25,7 @@ class styleEncoder(nn.Module):
         '''
         super(styleEncoder, self).__init__()
 
-        self.embed = nn.Embedding(V, D)
+        self.embed = nn.Embedding(V, D) # create a lookup table that stores embeddings of a fixed dictionary and size.
         self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])
         self.dropout = nn.Dropout(dropout)
         self.fc1 = nn.Linear(len(Ks)*Co, C)
