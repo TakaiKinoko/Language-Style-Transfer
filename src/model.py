@@ -72,8 +72,6 @@ class ContentEncoder(nn.Module):
     def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
-        self.fc1 = nn.Linear(len(Ks)*Co, C)
-
 
     def forward(self, x):
         out, h = self.gru(x, h)
@@ -98,38 +96,59 @@ class Generator(nn.Module):
         #needs to accept 2 inputs
         return out, h
 
+class Discriminator(nn.Module):
+    def __init__(self, V, D=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
+        super(Discriminator, self).__init__()
+        self.cnn = StyleEncoder(V, D=D, C=C, Ci=Ci, Co=Co, Ks=Ks, dropout=dropout)
+
+    def forward(self, x):
+        x = self.cnn(x)
+        x = F.sigmoid(x)
+        return x
 
 
 def train(train_loader):
-    num_epochs = 10
+    num_epochs = 100
     #batch_size = 128
     learning_rate = 1e-4
     weight_decay = 1e-5
 
-    content_encoder = ContentEncoder().cuda()
-    style_encoder = StyleEncoder().cuda()
-    generator = Generator().cuda()
+    Ez = ContentEncoder().cuda()
+    Ey = StyleEncoder().cuda()
+    G = Generator().cuda()
+    D = Discriminator().cuda()
+
+    d_steps = 20
+    g_steps = 20
 
     criterion = nn.MSELoss()
     #TODO: consider using different learning rates for each model component
-    optimizer = optim.Adam([
-                    {'params': latent_content.parameters()},
-                    {'params': latent_style.parameters()},
+    d_optimizer = optim.Adam([
+                    {'params': Ez.parameters()},
+                    {'params': Ey.parameters()},
                     {'params': model.parameters()}
                 ], lr=learning_rate, weight_decay=weight_decay)
 
+    g_optimizer = optim.
+
     for epoch in range(num_epochs):
-        for sentence, label in train_loader:
-            X = Variable(sentence).cuda()
-            # ===================forward=====================
-            latent_content = content_encoder()
-            latent_style = style_encoder()
-            output = generator()
-            loss = criterion(output, X)
-            # ===================backward====================
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        for d in range(d_steps):
+            D.zero_grad()
+
+
+        for g in range(g_steps):
+            for sentence, label in train_loader:
+                X = Variable(sentence).cuda()
+                # ===================forward=====================
+                latent_content = Ez()
+                latent_style = Ey()
+                output = G()
+                loss = criterion(output, X)
+                # ===================backward====================
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
 
         # ===================log========================
         print('epoch [{}/{}], loss:{:.4f}'
