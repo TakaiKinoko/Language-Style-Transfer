@@ -51,6 +51,8 @@ class GenerateWordEmbeddings(object):
             300: "glove.6B.300d.txt",
         }
 
+        self.padding = [0] * dim # padding -- used in __call__
+
         self.embeddings_dict = {}
         with open(glove_path+filenames[dim], 'r', encoding="utf8") as f:
             for line in f:
@@ -73,6 +75,9 @@ class GenerateWordEmbeddings(object):
                 sentence_embedding.append(vector)
             except:
                 print("Word " + word + " not in GloVe dataset")
+
+        while len(sentence_embedding) < 20:  # pad each sentence so they all have length = 20
+            sentence_embedding.append(self.padding)  
 
         return sentence_embedding
 
