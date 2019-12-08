@@ -68,6 +68,7 @@ class ContentEncoder(nn.Module):
             Input_dimension: 200, dimension of the word embedding.
             Hidden_dimension: 1000, dimension of the content representation.
             Dropout rate: 0.5
+        The last hidden state of the GRU E_z is used as the content representation.
     '''
     def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
@@ -82,18 +83,19 @@ class Generator(nn.Module):
         '''
         A GRU net as the generator G.
         Parameters:
-            Input_dimension: 200, dimension of the word embedding.
-            Hidden_dimension: 1000, dimension of the content representation.
+            Input_dimension: 1500, dimension of concat(content_representation, style_representation).
+            Hidden_dimension: 200, dimension of the word embedding.
             Dropout rate: 0.5
+        The last hidden state of the GRU G is used as the reconstructed word embedding.
     '''
-    def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
+    def __init__(self, input_dim=1500, hidden_dim=200, drop_rate=0.5):
         super(Generator, self).__init__()
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
     def forward(self, x, y):
         out, h = self.gru(x, h)
 
-        #needs to accept 2 inputs
+        #needs to accept 2 inputs, concatenate content and style representations at training time.
         return out, h
 
 class Discriminator(nn.Module):

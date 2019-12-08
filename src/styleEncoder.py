@@ -11,7 +11,7 @@ class styleEncoder(nn.Module):
     input_dim: 200, dimension of the word embeddings
     hidden_dim: 500, dimension of style representation
     GPU dropout probability: 0.5
-    filter size: 200 * {1, 2, 3, 4, 5} with 100 feature maps each
+    filter size: 200 * {1, 2, 3, 4, 5} with 100 (Co) feature maps each
     '''
     def __init__(self, V, D=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
         '''
