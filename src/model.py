@@ -12,7 +12,7 @@ N = 0
 
 class StyleEncoder(nn.Module):
     '''
-    ARCHITECTURE: 
+    ARCHITECTURE:
         conv layer -- max pooling -- fully connected layer
 
     input_dim: 200, dimension of the word embeddings
@@ -28,7 +28,7 @@ class StyleEncoder(nn.Module):
         C: number of classes
         Ci: number of in_channels
         Co: number of kernels (here: number of feature maps for each kernel size)
-        Ks: list of kernel sizes 
+        Ks: list of kernel sizes
         dropout: dropout rate
         '''
         super(StyleEncoder, self).__init__()
@@ -45,7 +45,7 @@ class StyleEncoder(nn.Module):
 
     def forward(self, x):
         x = self.embed(x)  # (N, W, D)
-        
+
         #if self.args.static:   # baseline model with only a static channel
         #    x = Variable(x)
 
@@ -61,20 +61,6 @@ class StyleEncoder(nn.Module):
         logit = self.fc1(x)  # (N, C)
         return logit
 
-'''
-class StyleEncoder(nn.Module):
-    def __init__(self):
-        super(StyleEncoder, self).__init__()
-        self.lin1 = nn.Linear(X_dim, N)
-
-    def forward(self, x):
-        x = self.lin1(x)
-        x = F.dropout(x, p=0.2, training=self.training)
-        x = F.relu(x)
-        x = F.sigmoid(x)
-        return x
-'''
-
 class ContentEncoder(nn.Module):
         '''
         A GRU net as the content encoder E_z.
@@ -86,33 +72,38 @@ class ContentEncoder(nn.Module):
     def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
-        #self.lin1 = nn.Linear(X_dim, N)
-        
+        self.fc1 = nn.Linear(len(Ks)*Co, C)
+
 
     def forward(self, x):
         out, h = self.gru(x, h)
         return out, h
-        #x = self.lin1(x)
-        #x = F.dropout(x, p=0.2, training=self.training)
-        #x = F.relu(x)
-        #x = F.sigmoid(x)
-        #return x
 
 
 class Generator(nn.Module):
-    def __init__(self):
+        '''
+        A GRU net as the generator G.
+        Parameters:
+            Input_dimension: 200, dimension of the word embedding.
+            Hidden_dimension: 1000, dimension of the content representation.
+            Dropout rate: 0.5
+    '''
+    def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
         super(Generator, self).__init__()
+        self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
     def forward(self, x, y):
+        out, h = self.gru(x, h)
 
-        return
+        #needs to accept 2 inputs
+        return out, h
 
 
 
 def train(train_loader):
     num_epochs = 10
     #batch_size = 128
-    learning_rate = 1e-3
+    learning_rate = 1e-4
     weight_decay = 1e-5
 
     content_encoder = ContentEncoder().cuda()
