@@ -72,14 +72,21 @@ class ContentEncoder(nn.Module):
         Dropout rate: 0.5
     The last hidden state of the GRU E_z is used as the content representation.
     '''
-    def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
+    def __init__(self, input_dim=200, hidden_dim=1000, n_layers=1, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
-    def forward(self, x):
+    def forward(self, x, h):
         out, h = self.gru(x, h)
         return out, h
 
+    def init_hidden(self, batch_size):
+        weight = next(self.parameters()).data
+        hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
+        return hidden
 
 class Generator(nn.Module):
     '''
@@ -90,15 +97,22 @@ class Generator(nn.Module):
         Dropout rate: 0.5
     The last hidden state of the GRU G is used as the reconstructed word embedding.
     '''
-    def __init__(self, input_dim=1500, hidden_dim=200, drop_rate=0.5):
+    def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
         super(Generator, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
-    def forward(self, x, y):
+    def forward(self, x, h):
         out, h = self.gru(x, h)
-
         #needs to accept 2 inputs, concatenate content and style representations at training time.
         return out, h
+
+    def init_hidden(self, batch_size):
+        weight = next(self.parameters()).data
+        hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
+        return hidden
 
 class Discriminator(nn.Module):
     def __init__(self, D=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
@@ -156,12 +170,14 @@ def train():
 
 
         for g in range(g_steps):
+            Ez_h = Ez.init_hidden(batch_size)
+            G_h = G.init_hidden(batch_size)
             for sentence, label in train_loader:
                 X = Variable(sentence).cuda()
                 # ===================forward=====================
-                latent_content = Ez()
+                _, latent_content = Ez(X, Ez_h)
                 latent_style = Ey()
-                output = G()
+                _, output = G(torch.cat((latent_content, latent_style), 1), G_h)
                 loss = criterion(output, X)
                 # ===================backward====================
                 g_optimizer.zero_grad()
