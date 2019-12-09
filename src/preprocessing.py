@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, DataLoader, ConcatDataset
+from torch.utils.data import Dataset, DataLoader, ConcatDataset, Subset
 from torchvision import transforms, utils
 import numpy as np
 
@@ -24,12 +24,13 @@ class LabeledSentencesDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        sample = self.sentences[idx]
+        sentence = self.sentences[idx]
 
         if self.transform:
-            sample = self.transform(sample)
+            sentence = self.transform(sentence)
 
-        return (sample, label)
+        sample = {'sentence': sentence, 'label': self.label}
+        return sample
 
     def __len__(self):
         return len(self.sentences)
@@ -68,16 +69,17 @@ class GenerateWordEmbeddings(object):
         """
         token_list = self._tokenize(sample)
 
-        sentence_embedding = []
-        for word in token_list:
+        sentence_embedding = np.zeros(20)
+        for i,word in enumerate(token_list):
             try:
                 vector = self.embeddings_dict[word]
-                sentence_embedding.append(vector)
+                sentence_embedding[i] = vector
+                #sentence_embedding.append(vector)
             except:
                 print("Word " + word + " not in GloVe dataset")
 
         while len(sentence_embedding) < 20:  # pad each sentence so they all have length = 20
-            sentence_embedding.append(self.padding)  
+            sentence_embedding.append(self.padding)
 
         return sentence_embedding
 
@@ -87,26 +89,31 @@ class GenerateWordEmbeddings(object):
 
         tokens_clean = []
         for t in tokens:
+            t = t.rstrip()
+            t = t.lowercase()
             if t not in punctuation:
                 tokens_clean.append(t)
 
         return tokens_clean
 
-def load_data():
-    train_batch_size = 32
+def load_data(batch_size):
 
     yelp_train_0 = LabeledSentencesDataset(0, "../data/yelp/sentiment.train.0", "../data/yelp/",
                             transform=GenerateWordEmbeddings(200, "../data/glove.6B/"))
     yelp_train_1 = LabeledSentencesDataset(1, "../data/yelp/sentiment.train.1", "../data/yelp/",
                             transform=GenerateWordEmbeddings(200, "../data/glove.6B/"))
 
+    full_train = ConcatDataset([yelp_train_0, yelp_train_1])
 
-    yelp_train = ConcatDataset([yelp_train_0, yelp_train_1])
+    size_of_pretrain = 128
+    pretrain = Subset(full_train, range(0,size_of_pretrain))
+    train = Subset(full_train, range(size_of_pretrain,len(full_train)))
 
-    train_loader = DataLoader(yelp_train,
-                                                       batch_size=train_batch_size,
-                                                       shuffle=True, **kwargs)
-    return train_loader
+    pretrain_loader = DataLoader(pretrain, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+
+    return pretrain_loader, train_loader #, dev_loader, test_loader
+
 
 if __name__ == "__main__":
     load_data()

@@ -21,7 +21,7 @@ class StyleEncoder(nn.Module):
     filter size: 200 * {1, 2, 3, 4, 5} with 100 feature maps each
     '''
 
-    def __init__(self, V, D=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
+    def __init__(self, D=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
         '''
         V: number of embeddings (vocabulary size)
         D: embeddings dimension
@@ -33,7 +33,8 @@ class StyleEncoder(nn.Module):
         '''
         super(StyleEncoder, self).__init__()
 
-        self.embed = nn.Embedding(V, D)
+        # I dont think embedding layer is needed because we used glove vectors as input
+        #self.embed = nn.Embedding(V, D)
         self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])
         self.dropout = nn.Dropout(dropout)
         self.fc1 = nn.Linear(len(Ks)*Co, C)
@@ -44,7 +45,8 @@ class StyleEncoder(nn.Module):
         return x
 
     def forward(self, x):
-        x = self.embed(x)  # (N, W, D)
+        # I dont think embedding layer is needed because we used glove vectors as input
+        #x = self.embed(x)  # (N, W, D)
 
         #if self.args.static:   # baseline model with only a static channel
         #    x = Variable(x)
@@ -62,13 +64,13 @@ class StyleEncoder(nn.Module):
         return logit
 
 class ContentEncoder(nn.Module):
-        '''
-        A GRU net as the content encoder E_z.
-        Parameters:
-            Input_dimension: 200, dimension of the word embedding.
-            Hidden_dimension: 1000, dimension of the content representation.
-            Dropout rate: 0.5
-        The last hidden state of the GRU E_z is used as the content representation.
+    '''
+    A GRU net as the content encoder E_z.
+    Parameters:
+        Input_dimension: 200, dimension of the word embedding.
+        Hidden_dimension: 1000, dimension of the content representation.
+        Dropout rate: 0.5
+    The last hidden state of the GRU E_z is used as the content representation.
     '''
     def __init__(self, input_dim=200, hidden_dim=1000, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
@@ -80,13 +82,13 @@ class ContentEncoder(nn.Module):
 
 
 class Generator(nn.Module):
-        '''
-        A GRU net as the generator G.
-        Parameters:
-            Input_dimension: 1500, dimension of concat(content_representation, style_representation).
-            Hidden_dimension: 200, dimension of the word embedding.
-            Dropout rate: 0.5
-        The last hidden state of the GRU G is used as the reconstructed word embedding.
+    '''
+    A GRU net as the generator G.
+    Parameters:
+        Input_dimension: 1500, dimension of concat(content_representation, style_representation).
+        Hidden_dimension: 200, dimension of the word embedding.
+        Dropout rate: 0.5
+    The last hidden state of the GRU G is used as the reconstructed word embedding.
     '''
     def __init__(self, input_dim=1500, hidden_dim=200, drop_rate=0.5):
         super(Generator, self).__init__()
@@ -99,9 +101,9 @@ class Generator(nn.Module):
         return out, h
 
 class Discriminator(nn.Module):
-    def __init__(self, V, D=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
+    def __init__(self, D=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
         super(Discriminator, self).__init__()
-        self.cnn = StyleEncoder(V, D=D, C=C, Ci=Ci, Co=Co, Ks=Ks, dropout=dropout)
+        self.cnn = StyleEncoder(D=D, C=C, Ci=Ci, Co=Co, Ks=Ks, dropout=dropout)
 
     def forward(self, x):
         x = self.cnn(x)
@@ -109,33 +111,48 @@ class Discriminator(nn.Module):
         return x
 
 
-def train(train_loader):
+def train():
+
+    batch_size = 32
     num_epochs = 100
-    #batch_size = 128
-    learning_rate = 1e-4
-    weight_decay = 1e-5
-
-    Ez = ContentEncoder().cuda()
-    Ey = StyleEncoder().cuda()
-    G = Generator().cuda()
-    D = Discriminator().cuda()
-
     d_steps = 20
     g_steps = 20
 
+    d_learning_rate = 1e-3
+    g_learning_rate = 1e-3
+    d_momentum = 0.9
+    g_weight_decay = 1e-5
+
+    _, train_loader = load_data(batch_size)
+
+    Ez = ContentEncoder()
+    Ey = StyleEncoder()
+    G = Generator()
+    D = Discriminator()
+
     criterion = nn.MSELoss()
     #TODO: consider using different learning rates for each model component
-    d_optimizer = optim.Adam([
+
+    d_optimizer = optim.SGD(D.parameters(), lr=d_learning_rate, momentum=d_momentum)
+
+    g_optimizer = optim.Adam([
                     {'params': Ez.parameters()},
                     {'params': Ey.parameters()},
-                    {'params': model.parameters()}
-                ], lr=learning_rate, weight_decay=weight_decay)
+                    {'params': G.parameters()}
+                ], lr=g_learning_rate, weight_decay=g_weight_decay)
 
-    g_optimizer = optim.
-
+    print("1")
     for epoch in range(num_epochs):
         for d in range(d_steps):
+            print("2")
             D.zero_grad()
+            for thing in train_loader:
+                print("3")
+                print(thing)
+                for sentence in sentence_batch:
+                    print("4")
+                    print(sentence)
+                    X = Variable(sentence).cuda()
 
 
         for g in range(g_steps):
@@ -147,7 +164,7 @@ def train(train_loader):
                 output = G()
                 loss = criterion(output, X)
                 # ===================backward====================
-                optimizer.zero_grad()
+                g_optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
@@ -161,8 +178,7 @@ def train(train_loader):
 
 
 if __name__ == "__main__":
-    train_loader = load_data()
-    train(train_loader)
+    train()
 
 
 #
