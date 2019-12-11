@@ -202,7 +202,6 @@ def train():
                 X = Variable(torch.from_numpy(indices).long())
                 X_vec = Embed(X)
 
-                # ===================DEBUGGING=====================
                 print("Hidden--------------------------")
                 print(Ez_h.shape)
                 print("Input--------------------------")
@@ -211,8 +210,21 @@ def train():
                 # ===================forward=====================
                 _, latent_content = Ez(X_vec, Ez_h)
                 latent_style = Ey(X_vec)
+
+                print("content--------------------------")
+                print(latent_content.shape)
+                print("style--------------------------")
+                print(latent_style.shape)
+
+                # ^^ these need to be the same number of dimensions for the torch.cat to work *****
+
                 _, output = G(torch.cat((latent_content, latent_style), 1), G_h)
                 loss = criterion(output, X_vec)
+
+                print("output--------------------------")
+                print(output.shape)
+                print("input--------------------------")
+                print(X_vec.shape)
                 # ===================backward====================
                 g_optimizer.zero_grad()
                 loss.backward()
