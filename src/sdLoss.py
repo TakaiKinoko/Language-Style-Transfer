@@ -29,7 +29,7 @@ def sdLoss(p_ds, y_target, Ys):
 
     for (p, ys) in zip(p_ds, Ys):
         dis.append(p * pow(styleDiscrepancy(ys, y_target), 2))
-    
+
     return np.mean(dis)
 
 def styleDiscrepancy(ys, y_target):

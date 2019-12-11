@@ -5,10 +5,39 @@ import torch.nn as nn
 from torch import nn
 import torch.nn.functional as F
 import torch.optim as optim
-from preprocessing import load_data
+from preprocessing import load_data, read_glove_vecs, pretrained_embedding_layer, sentences_to_indices
 
 X_dim = 0
 N = 0
+
+class EmbeddingLayer(nn.Module):
+    '''
+    An embedding layer that converts strings to vectors
+    Parameters:
+        vocab_size: number of embeddings (vocabulary size)
+        pretrained_vectors: matrix of word embeddings
+        input_dim: embeddings dimension
+    '''
+    def __init__(self, vocab_size, pretrained_vectors, input_dim=200):
+        super(EmbeddingLayer, self).__init__()
+        self.embed = nn.Embedding(vocab_size, input_dim)
+        pretrained_vectors = np.array(pretrained_vectors)
+        self.embed.weight.data.copy_(torch.from_numpy(pretrained_vectors))
+        self.embed.weight.requires_grad=False
+
+        # self.word_to_index = word_to_index
+
+    def forward(self, word_index):
+
+        # break string up
+        # make a size 20 vector
+        # for each vector put average
+        # for word in
+        print("*****************************************")
+        print(word_index.shape)
+        word_vector = self.embed(word_index)
+        return word_vector
+
 
 class StyleEncoder(nn.Module):
     '''
@@ -20,11 +49,9 @@ class StyleEncoder(nn.Module):
     GPU dropout probability: 0.5
     filter size: 200 * {1, 2, 3, 4, 5} with 100 feature maps each
     '''
-
-    def __init__(self, D=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
+    def __init__(self, input_dim=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
         '''
-        V: number of embeddings (vocabulary size)
-        D: embeddings dimension
+        input_dim: embeddings dimension
         C: number of classes
         Ci: number of in_channels
         Co: number of kernels (here: number of feature maps for each kernel size)
@@ -33,9 +60,7 @@ class StyleEncoder(nn.Module):
         '''
         super(StyleEncoder, self).__init__()
 
-        # I dont think embedding layer is needed because we used glove vectors as input
-        #self.embed = nn.Embedding(V, D)
-        self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])
+        self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, input_dim)) for K in Ks])
         self.dropout = nn.Dropout(dropout)
         self.fc1 = nn.Linear(len(Ks)*Co, C)
 
@@ -45,9 +70,6 @@ class StyleEncoder(nn.Module):
         return x
 
     def forward(self, x):
-        # I dont think embedding layer is needed because we used glove vectors as input
-        #x = self.embed(x)  # (N, W, D)
-
         #if self.args.static:   # baseline model with only a static channel
         #    x = Variable(x)
 
@@ -63,6 +85,7 @@ class StyleEncoder(nn.Module):
         logit = self.fc1(x)  # (N, C)
         return logit
 
+
 class ContentEncoder(nn.Module):
     '''
     A GRU net as the content encoder E_z.
@@ -76,17 +99,17 @@ class ContentEncoder(nn.Module):
         super(ContentEncoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
     def forward(self, x, h):
         out, h = self.gru(x, h)
         return out, h
 
-    def init_hidden(self, batch_size):
+    def init_hidden(self, batch_size, device):
         weight = next(self.parameters()).data
         hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
         return hidden
+
 
 class Generator(nn.Module):
     '''
@@ -109,15 +132,16 @@ class Generator(nn.Module):
         #needs to accept 2 inputs, concatenate content and style representations at training time.
         return out, h
 
-    def init_hidden(self, batch_size):
+    def init_hidden(self, batch_size, device):
         weight = next(self.parameters()).data
         hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
         return hidden
 
+
 class Discriminator(nn.Module):
-    def __init__(self, D=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
+    def __init__(self, input_dim=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
         super(Discriminator, self).__init__()
-        self.cnn = StyleEncoder(D=D, C=C, Ci=Ci, Co=Co, Ks=Ks, dropout=dropout)
+        self.cnn = StyleEncoder(input_dim=input_dim, C=C, Ci=Ci, Co=Co, Ks=Ks, dropout=dropout)
 
     def forward(self, x):
         x = self.cnn(x)
@@ -126,7 +150,6 @@ class Discriminator(nn.Module):
 
 
 def train():
-
     batch_size = 32
     num_epochs = 100
     d_steps = 20
@@ -137,53 +160,63 @@ def train():
     d_momentum = 0.9
     g_weight_decay = 1e-5
 
-    _, train_loader = load_data(batch_size)
+    glove_file = '../data/glove.6B/glove.6B.200d.txt'
+    word_to_index, index_to_word, word_to_vec_map = read_glove_vecs(glove_file)
+    vocab_len = len(word_to_index) + 1
+    emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index)
 
+    Embed = EmbeddingLayer(vocab_len, emb_vecs)
     Ez = ContentEncoder()
     Ey = StyleEncoder()
     G = Generator()
     D = Discriminator()
 
     criterion = nn.MSELoss()
-    #TODO: consider using different learning rates for each model component
-
     d_optimizer = optim.SGD(D.parameters(), lr=d_learning_rate, momentum=d_momentum)
-
     g_optimizer = optim.Adam([
                     {'params': Ez.parameters()},
                     {'params': Ey.parameters()},
                     {'params': G.parameters()}
                 ], lr=g_learning_rate, weight_decay=g_weight_decay)
 
-    print("1")
+    _, train_loader = load_data(batch_size, word_to_index)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     for epoch in range(num_epochs):
         for d in range(d_steps):
-            print("2")
-            D.zero_grad()
-            for thing in train_loader:
-                print("3")
-                print(thing)
-                for sentence in sentence_batch:
-                    print("4")
-                    print(sentence)
-                    X = Variable(sentence).cuda()
-
+            d_optimizer.zero_grad()
+            for sentence_batch, label_batch in train_loader:
+                pass
+                #TODO: implement training procedure for the Discriminator
 
         for g in range(g_steps):
-            Ez_h = Ez.init_hidden(batch_size)
-            G_h = G.init_hidden(batch_size)
-            for sentence, label in train_loader:
-                X = Variable(sentence).cuda()
+            g_optimizer.zero_grad()
+            for sentence_batch, label_batch in train_loader:
+                # Ez_h = Ez.init_hidden(batch_size, device)
+                # G_h = G.init_hidden(batch_size, device)
+                Ez_h = Ez.init_hidden(20, device)
+                G_h = G.init_hidden(20, device)
+
+                indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
+                X = Variable(torch.from_numpy(indices).long())
+                X_vec = Embed(X)
+
+                # ===================DEBUGGING=====================
+                print("Hidden--------------------------")
+                print(Ez_h.shape)
+                print("Input--------------------------")
+                print(X_vec.shape)
+
                 # ===================forward=====================
-                _, latent_content = Ez(X, Ez_h)
-                latent_style = Ey()
+                _, latent_content = Ez(X_vec, Ez_h)
+                latent_style = Ey(X_vec)
                 _, output = G(torch.cat((latent_content, latent_style), 1), G_h)
-                loss = criterion(output, X)
+                loss = criterion(output, X_vec)
                 # ===================backward====================
                 g_optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-
 
         # ===================log========================
         print('epoch [{}/{}], loss:{:.4f}'
@@ -195,53 +228,3 @@ def train():
 
 if __name__ == "__main__":
     train()
-
-
-#
-# def train(P, Q, D_gauss, P_decoder, Q_encoder, Q_generator, D_gauss_solver, data_loader):
-#     '''
-#     Train procedure for one epoch.
-#     '''
-#     TINY = 1e-15
-#     # Set the networks in train mode (apply dropout when needed)
-#     ContentEncoder.train()
-#     StyleEncoder.train()
-#     D_gauss.train()
-#
-#     # Loop through the labeled and unlabeled dataset getting one batch of samples from each
-#     # The batch size has to be a divisor of the size of the dataset or it will return
-#     # invalid samples
-#     for X, target in data_loader:
-#
-#         # Load batch and normalize samples to be between 0 and 1
-#         X = X * 0.3081 + 0.1307
-#         X.resize_(train_batch_size, X_dim)
-#         X, target = Variable(X), Variable(target)
-#         if cuda:
-#             X, target = X.cuda(), target.cuda()
-#
-#         # Init gradients
-#         P.zero_grad()
-#         Q.zero_grad()
-#         D_gauss.zero_grad()
-#
-#         #######################
-#         # Reconstruction phase
-#         #######################
-#         z_gauss = Q(X)
-#         z_cat = get_categorical(target, n_classes=10)
-#         if cuda:
-#             z_cat = z_cat.cuda()
-#
-#         z_sample = torch.cat((z_cat, z_gauss), 1)
-#
-#         X_sample = P(z_sample)
-#         recon_loss = F.binary_cross_entropy(X_sample + TINY, X.resize(train_batch_size, X_dim) + TINY)
-#
-#         recon_loss.backward()
-#         P_decoder.step()
-#         Q_encoder.step()
-#
-#         P.zero_grad()
-#         Q.zero_grad()
-#         D_gauss.zero_grad()
