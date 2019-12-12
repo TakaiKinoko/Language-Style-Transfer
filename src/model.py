@@ -183,13 +183,10 @@ def train():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    for epoch in range(num_epochs):
-        for d in range(d_steps):
-            d_optimizer.zero_grad()
-            for sentence_batch, label_batch in train_loader:
-                pass
-                #TODO: implement training procedure for the Discriminator
+    #TODO: Generate random seed, so that y_target is the same every time
+    y_target = torch.Tensor(np.random.rand())
 
+    for epoch in range(num_epochs):
         for g in range(g_steps):
             g_optimizer.zero_grad()
             for sentence_batch, label_batch in train_loader:
@@ -208,17 +205,17 @@ def train():
                 print(X_vec.shape)
 
                 # ===================forward=====================
-                _, latent_content = Ez(X_vec, Ez_h)
-                latent_style = Ey(X_vec)
+                _, z = Ez(X_vec, Ez_h)
+                y = Ey(X_vec)
 
                 print("content--------------------------")
-                print(latent_content.shape)
+                print(z.shape)
                 print("style--------------------------")
-                print(latent_style.shape)
+                print(y.shape)
 
                 # ^^ these need to be the same number of dimensions for the torch.cat to work *****
 
-                _, output = G(torch.cat((latent_content, latent_style), 1), G_h)
+                _, output = G(torch.cat((z, y), 1), G_h)
                 loss = criterion(output, X_vec)
 
                 print("output--------------------------")
@@ -229,6 +226,63 @@ def train():
                 g_optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+
+        for d in range(d_steps):
+            d_optimizer.zero_grad()
+            for sentence_batch, label_batch in target_loader:
+                #TODO: implement training procedure for the Discriminator
+                # target_sentence_batch
+                #
+                # Ez_h = Ez.init_hidden(20, device)
+                # G_h = G.init_hidden(20, device)
+                #
+                # indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
+                # X = Variable(torch.from_numpy(indices).long())
+                # X_vec = Embed(X)
+                #
+                # z_target = Ez(x_target)
+                # x_target = G(torch.cat((z_target, y_target), 1), G_h)
+                # x_source = G(torch.cat((z, y_target), 1), G_h)
+                #
+                # is_source = D(x_source, x_target)
+
+
+
+                #train D with backward
+
+                #inference run needs to take 1:source sentence, 2:target sentence
+
+
+# GENERAL LAYOUT:
+# D:
+#                 #train D to determine if sentene was generated from source or target
+#                 d.zero_grad
+#                 generate x_target from s_target_1
+#                 pass x_source through D
+#                 get discriminator loss
+#                 loss.backward
+#
+#                 generate x_source from s_source_1
+#                 pass x_source through D
+#                 get discriminator loss
+#                 loss.backward
+#
+#                 d.step #train D only
+#
+# G:
+#                 #train G to generate sentences from source that fool the discriminator
+#                 g.zero_grad
+#
+#                 generate x_source from s_source_2
+#                 get reconstruction loss
+#                 loss.backward
+#
+#                 pass x_source through D
+#                 get discriminator loss
+#                 loss.backward
+#
+#                 g.step
+
 
         # ===================log========================
         print('epoch [{}/{}], loss:{:.4f}'
