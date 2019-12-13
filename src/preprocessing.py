@@ -187,7 +187,7 @@ def pretrained_embedding_layer(word_to_vec_map, word_to_index, emb_dim=200):
         emb_matrix[index, :] = word_to_vec_map[word]
     return emb_matrix
 
-def load_data(batch_size, word_to_index):
+def load_data(batch_size):
     # yelp_train_0 = LabeledSentencesDataset(0, "../data/yelp/sentiment.train.0", "../data/yelp/",
     #                                             transform=GenerateIndexedSentence(word_to_index))
     # yelp_train_1 = LabeledSentencesDataset(1, "../data/yelp/sentiment.train.1", "../data/yelp/",
@@ -202,9 +202,10 @@ def load_data(batch_size, word_to_index):
     train = Subset(full_train, range(size_of_pretrain,len(full_train)))
 
     pretrain_loader = DataLoader(pretrain, batch_size=batch_size, shuffle=True)
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+    train_loader_source = DataLoader(train, batch_size=batch_size, shuffle=True)
+    train_loader_target = DataLoader(yelp_train_1, batch_size=batch_size, shuffle=True)
 
-    return pretrain_loader, train_loader #, dev_loader, test_loader
+    return pretrain_loader, train_loader_source, train_loader_target #, dev_loader, test_loader
 
 
 if __name__ == "__main__":
