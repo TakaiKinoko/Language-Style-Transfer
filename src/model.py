@@ -73,17 +73,29 @@ class StyleEncoder(nn.Module):
         #if self.args.static:   # baseline model with only a static channel
         #    x = Variable(x)
 
+        print("((((((((((1))))))))))")
+        print(x.shape)
         x = x.unsqueeze(1)  # (N, Ci, W, D)
-
+        print("((((((((((2))))))))))")
+        print(x.shape)
         x = [F.relu(conv(x)).squeeze(3) for conv in self.convs1]  # [(N, Co, W), ...]*len(Ks)
-
+        print("((((((((((3))))))))))")
+        for i in x:
+            print(i.shape)
         x = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x]  # [(N, Co), ...]*len(Ks)
+        # x = [i.permute(0,2,1) for i in x]
+        print("((((((((((4))))))))))")
+        for i in x:
+            print(i.shape)
 
         x = torch.cat(x, 1)
-
+        print("((((((((((5))))))))))")
+        print(x.shape)
         x = self.dropout(x)  # (N, len(Ks)*Co)
-        logit = self.fc1(x)  # (N, C)
-        return logit
+        #logit = self.fc1(x)  # (N, C)
+        print("((((((((((6))))))))))")
+        print(x.shape)
+        return x  #logit
 
 
 class ContentEncoder(nn.Module):
@@ -127,7 +139,8 @@ class Generator(nn.Module):
 
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
-    def forward(self, x, h):
+    def forward(self, z, y, h):
+        x =  torch.cat((z, y), 1)
         out, h = self.gru(x, h)
         #needs to accept 2 inputs, concatenate content and style representations at training time.
         return out, h
@@ -161,8 +174,10 @@ def train():
 
     d_learning_rate = 1e-3
     g_learning_rate = 1e-3
+    y_learning_rate = 1e-3
     d_momentum = 0.9
     g_weight_decay = 1e-5
+    y_weight_decay = 1e-5
 
     glove_file = '../data/glove.6B/glove.6B.200d.txt'
     word_to_index, index_to_word, word_to_vec_map = read_glove_vecs(glove_file)
@@ -176,66 +191,74 @@ def train():
     D = Discriminator()
 
     criterion = nn.MSELoss()
+    d_criterion = nn.BCELoss()
+    cycle_criterion = nn.MSELoss()
     d_optimizer = optim.SGD(D.parameters(), lr=d_learning_rate, momentum=d_momentum)
     g_optimizer = optim.Adam([
                     {'params': Ez.parameters()},
                     {'params': Ey.parameters()},
                     {'params': G.parameters()}
                 ], lr=g_learning_rate, weight_decay=g_weight_decay)
+    y_optimizer = optim.Adam(Ey.parameters(), lr=y_learning_rate, weight_decay=y_weight_decay)
 
     _, train_loader_source, train_loader_target = load_data(batch_size)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     #TODO: Generate random seed, so that y_target is the same every time
-    y_target = torch.Tensor(np.random.rand())
+    y_target = torch.Tensor(np.random.rand(500))
+    y_target = y_target.unsqueeze(-1)
+    y_target = y_target.expand(500, 32) #expand to 32 dimensions
+    y_target = y_target.transpose(1, 0) #expand to 32 dimensions
 
-    # for epoch in range(num_epochs):
-    #     for g in range(g_steps):
-    #         g_optimizer.zero_grad()
-    #         for sentence_batch, label_batch in train_loader:
-    #
-    #             # Ez_h = Ez.init_hidden(batch_size, device)
-    #             # G_h = G.init_hidden(batch_size, device)
-    #             Ez_h = Ez.init_hidden(20, device)
-    #             G_h = G.init_hidden(20, device)
-    #
-    #             indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
-    #             X = Variable(torch.from_numpy(indices).long())
-    #             X_vec = Embed(X)
-    #
-    #             print("Hidden--------------------------")
-    #             print(Ez_h.shape)
-    #             print("Input--------------------------")
-    #             print(X_vec.shape)
-    #
-    #             # ===================forward=====================
-    #             _, z = Ez(X_vec, Ez_h)
-    #             y = Ey(X_vec)
-    #
-    #             print("content--------------------------")
-    #             print(z.shape)
-    #             print("style--------------------------")
-    #             print(y.shape)
-    #
-    #             # ^^ these need to be the same number of dimensions for the torch.cat to work *****
-    #
-    #             _, output = G(torch.cat((z, y), 1), G_h)
-    #             loss = criterion(output, X_vec)
-    #
-    #             print("output--------------------------")
-    #             print(output.shape)
-    #             print("input--------------------------")
-    #             print(X_vec.shape)
-    #
-    #             # ===================backward====================
-    #             g_optimizer.zero_grad()
-    #             loss.backward()
-    #             optimizer.step()
+    for epoch in range(num_epochs):
+        for g in range(g_steps):
+            g_optimizer.zero_grad()
+            for sentence_batch, label_batch in train_loader_source:
+
+                # Ez_h = Ez.init_hidden(batch_size, device)
+                # G_h = G.init_hidden(batch_size, device)
+                Ez_h = Ez.init_hidden(20, device)
+                G_h = G.init_hidden(20, device)
+
+                indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
+                X = Variable(torch.from_numpy(indices).long())
+                X_vec = Embed(X)
+
+                print("Hidden--------------------------")
+                print(Ez_h.shape)
+                print("Input--------------------------")
+                print(X_vec.shape)
+
+                # ===================forward=====================
+                z,_ = Ez(X_vec, Ez_h)
+                print("content--------------------------")
+                print(z.shape)
+                # TODO: make z shape (32, 1000) by taking the last output of the RNN
+
+                y = Ey(X_vec)
 
 
+                print("style--------------------------")
+                print(y.shape)
+                print(y)
 
-                #inference run needs to take 1:source sentence, 2:target sentence
+                # ^^ these need to be the same number of dimensions for the torch.cat to work *****
+
+                output, _ = G(z, y, G_h)
+                loss = criterion(output, X_vec)
+
+                print("output--------------------------")
+                print(output.shape)
+                print("input--------------------------")
+                print(X_vec.shape)
+
+                # ===================backward====================
+                g_optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+
 
 
     for epoch in range(num_epochs):
@@ -254,11 +277,11 @@ def train():
             x_indices = Variable(torch.from_numpy(indices).long())
             x_target = Embed(x_indices)
 
-            _, z_target = Ez(x_target, Ez_h)
-            _, x_target_gen = G(torch.cat((z_target, y_target), 1), G_h)
-
+            z_target,_ = Ez(x_target, Ez_h)
+            x_target_gen,_ = G(z_target, y_target, G_h)
             d_target_decision = D(x_target_gen)
-            d_target_loss = criterion(d_target_decision, Variable(torch.ones([1,1]))) #ones = target
+
+            d_target_loss = d_criterion(d_target_decision, Variable(torch.ones([1,1]))) #ones = target
             d_target_loss.backward()
 
 
@@ -270,11 +293,11 @@ def train():
             x_indices = Variable(torch.from_numpy(indices).long())
             x_source = Embed(x_indices)
 
-            _, z_source = Ez(x_source, Ez_h)
-            _, x_source_gen = G(torch.cat((z_source, y_target), 1), G_h)
-
+            z_source,_ = Ez(x_source, Ez_h)
+            x_source_gen,_ = G(z_source, y_target, G_h)
             d_source_decision = D(x_source_gen)
-            d_source_loss = criterion(d_source_decision, Variable(torch.zeros([1,1]))) #zeros = source
+
+            d_source_loss = d_criterion(d_source_decision, Variable(torch.zeros([1,1]))) #zeros = source
             d_source_loss.backward()
 
             #update weights
@@ -295,20 +318,26 @@ def train():
             X = Variable(torch.from_numpy(indices).long())
             X_vec = Embed(X)
 
-            _, z = Ez(X_vec, Ez_h)
+            z,_ = Ez(X_vec, Ez_h)
             y = Ey(X_vec)
+            x_reconstructed,_ = G(z, y, G_h)
 
-            _, x_reconstructed = G(torch.cat((z, y), 1), G_h)
             loss_reconstruction = criterion(x_reconstructed, X_vec)
-
             loss_reconstruction.backward()
 
+            #CYCLE CONSISTENCY LOSS
+            z_cycle = Ez(x_reconstructed)
+            y_cycle = Ey(x_source)
+            x_cycle = G(z_cycle, y_cycle)
+
+            loss_cycle = cycle_criterion(x_cycle, x_source)
+            loss_cycle.backward()
 
             #DISCRIMINATOR LOSS
             #train G to generate sentences from source that fool the discriminator
             d_fake_decision = D(x_source)
 
-            generator_loss = criterion(d_fake_decision, Variable(torch,ones([1,1])))
+            generator_loss = d_criterion(d_fake_decision, Variable(torch,ones([1,1])))
             generator_loss.backward()
 
             #update weights
