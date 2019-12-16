@@ -190,12 +190,14 @@ def train():
     vocab_len = len(word_to_index) + 1
     emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index)
 
-    Embed = EmbeddingLayer(vocab_len, emb_vecs)
-    Ez = ContentEncoder()
-    Ey = StyleEncoder()
-    G = Generator()
-    D = Discriminator()
-    D_pretrained = Discriminator()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    Embed = EmbeddingLayer(vocab_len, emb_vecs).to(device)
+    Ez = ContentEncoder().to(device)
+    Ey = StyleEncoder().to(device)
+    G = Generator().to(device)
+    D = Discriminator().to(device)
+    D_pretrained = Discriminator().to(device)
 
     criterion = nn.MSELoss()
     d_criterion = nn.BCELoss()
@@ -207,25 +209,26 @@ def train():
                     {'params': G.parameters()}
                 ], lr=g_learning_rate, weight_decay=g_weight_decay)
     y_optimizer = optim.Adam(Ey.parameters(), lr=y_learning_rate, weight_decay=y_weight_decay)
+    p_optimizer = optim.SGD(D_pretrained.parameters(), lr=d_learning_rate, momentum=d_momentum)
+
 
     pretrain_loader, train_loader_source, train_loader_target = load_data(batch_size)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     np.random.seed(seed=42)
     y_target = torch.Tensor(np.random.rand(500))
     y_target = y_target.unsqueeze(-1)
     y_target = y_target.expand(500, 32) #expand to 32 dimensions
-    y_target = y_target.transpose(1, 0)
+    y_target = y_target.transpose(1, 0).to(device)
 
-    gen_start_vector = torch.Tensor(np.random.rand(200))
+    gen_start_vector = torch.Tensor(np.random.rand(200)).to(device)
 
     for epoch in range(num_epochs):
         g_optimizer.zero_grad()
         for sentence_batch, label_batch in train_loader_source:
             Ez_h = Ez.init_hidden(20, device)
             indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
-            X = Variable(torch.from_numpy(indices).long())
+            X = Variable(torch.from_numpy(indices).long()).to(device)
             X_vec = Embed(X)
             # ===================forward=====================
             z = Ez(X_vec, Ez_h)
@@ -250,15 +253,15 @@ def train():
     #*********************************
     #TRAIN STYLE DISCREPANCY DISCRIMINATOR
     #*********************************
-    # pretrain_epochs = 10
-    # for epoch in range(pretrain_epochs):
-    #     for sentence_batch, label_batch in pretrain_loader:
-    #         D_pretrained()
-    #         if label_batch
-    #         print(label_batch.shape)
-    #         d_target_loss = d_criterion(d_target_decision, Variable(torch.Tensor(label_batch))) #ones = target
-    #
-    #         loss = d_criterion()
+    pretrain_epochs = 10
+    for epoch in range(pretrain_epochs):
+        for sentence_batch, label_batch in pretrain_loader:
+            p_optimizer.zero_grad()
+            p_decision = D_pretrained(sentence_batch)
+            print(label_batch.shape)
+            p_loss = d_criterion(p_decision, Variable(torch.Tensor(label_batch)))
+            p_loss.backward()
+            p_optimizer.step()
 
 
     for epoch in range(num_epochs):
