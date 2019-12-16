@@ -136,13 +136,12 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
-    def forward(self, z, y, h):
-        x =  torch.cat((z, y), 1)
-        out, h = self.gru(x, h)
-        #needs to accept 2 inputs, concatenate content and style representations at training time.
+    def forward(self, z, y, start):
+        first_hidden =  torch.cat((z, y), 1)
+        out, h = self.gru(start,first_hidden)
+        #out, h = self.gru(out,h)
         return out, h
 
     def init_hidden(self, batch_size, device):
@@ -211,6 +210,8 @@ def train():
     y_target = y_target.expand(500, 32) #expand to 32 dimensions
     y_target = y_target.transpose(1, 0) #expand to 32 dimensions
 
+    gen_start_vector = torch.Tensor(np.random.rand(200))
+
     for epoch in range(num_epochs):
         for g in range(g_steps):
             g_optimizer.zero_grad()
@@ -219,7 +220,6 @@ def train():
                 # Ez_h = Ez.init_hidden(batch_size, device)
                 # G_h = G.init_hidden(batch_size, device)
                 Ez_h = Ez.init_hidden(20, device)
-                G_h = G.init_hidden(20, device)
 
                 indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
                 X = Variable(torch.from_numpy(indices).long())
@@ -231,10 +231,11 @@ def train():
                 print(X_vec.shape)
 
                 # ===================forward=====================
-                z,_ = Ez(X_vec, Ez_h)
+                out,h = Ez(X_vec, Ez_h)
+                z = out[:,-1,:]
                 print("content--------------------------")
                 print(z.shape)
-                # TODO: make z shape (32, 1000) by taking the last output of the RNN
+
 
                 y = Ey(X_vec)
 
@@ -245,7 +246,7 @@ def train():
 
                 # ^^ these need to be the same number of dimensions for the torch.cat to work *****
 
-                output, _ = G(z, y, G_h)
+                output, _ = G(z, y, gen_start_vector)
                 loss = criterion(output, X_vec)
 
                 print("output--------------------------")
