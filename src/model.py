@@ -138,16 +138,29 @@ class Generator(nn.Module):
         self.n_layers = n_layers
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
-    def forward(self, z, y, start):
-        first_hidden =  torch.cat((z, y), 1)
-        out, h = self.gru(start,first_hidden)
-        #out, h = self.gru(out,h)
-        return out, h
+    def forward_step(input, hidden):
+        """Perform a single decoder step (1 word)"""
+        return self.gru(input, hidden)
 
-    def init_hidden(self, batch_size, device):
-        weight = next(self.parameters()).data
-        hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
-        return hidden
+    def forward(self, start_vec, first_hidden, max_len=20):
+        """Unroll the decoder one step at a time."""
+        output = []
+
+        input = start_vec
+        hidden = first_hidden
+        for i in range(max_len):
+            #out, h = self.forward_step(input, hidden)
+            out, h = self.gru(input, hidden)
+            input = out
+            hidden = h
+            output.append(out)
+
+        return output
+
+    def init_hidden(self, z, y):
+        first_hidden =  torch.cat((z, y), 1)
+        return first_hidden
+        #return torch.tanh(self.bridge(encoder_final))
 
 
 class Discriminator(nn.Module):
@@ -188,6 +201,8 @@ def train():
     Ey = StyleEncoder()
     G = Generator()
     D = Discriminator()
+    D_pretrained = Discriminator()
+
 
     criterion = nn.MSELoss()
     d_criterion = nn.BCELoss()
@@ -236,17 +251,14 @@ def train():
                 print("content--------------------------")
                 print(z.shape)
 
-
                 y = Ey(X_vec)
-
 
                 print("style--------------------------")
                 print(y.shape)
                 print(y)
 
-                # ^^ these need to be the same number of dimensions for the torch.cat to work *****
-
-                output, _ = G(z, y, gen_start_vector)
+                latent_rep = G.init_hidden(z, y)
+                output, _ = G(gen_start_vector, latent_rep)
                 loss = criterion(output, X_vec)
 
                 print("output--------------------------")
@@ -343,6 +355,21 @@ def train():
 
             #update weights
             g_optimizer.step()
+
+
+            #*********************************
+            #TRAIN STYLE ENCODER
+            #*********************************
+            y_optimizer.zero_grad()
+
+            class = D_pretrained(sentence)
+            loss_style = criterion()
+            loss_style.backward()
+
+            y_optimizer.step()
+
+
+
 
 
         # ===================log========================
