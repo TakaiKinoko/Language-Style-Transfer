@@ -180,7 +180,7 @@ def train():
     emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    #device = torch.device("cpu")
 
     Embed = EmbeddingLayer(vocab_len, emb_vecs).to(device)
     Ez = ContentEncoder().to(device)
@@ -212,6 +212,9 @@ def train():
     gen_start_vector = torch.Tensor(np.random.rand(200)).to(device)
 
 
+    #--------------------------------------
+    #TEMPORARY TEST OF RECONSTRUCTION LOSS
+    #--------------------------------------
     for epoch in range(num_epochs):
         g_optimizer.zero_grad()
         for sentence_batch, label_batch in train_loader_source:
@@ -239,9 +242,9 @@ def train():
 
 
 
-    #*********************************
+    #**************************************
     #TRAIN STYLE DISCREPANCY DISCRIMINATOR
-    #*********************************
+    #**************************************
     pretrain_epochs = 10
     for epoch in range(pretrain_epochs):
         for sentence_batch, label_batch in pretrain_loader:
@@ -251,6 +254,14 @@ def train():
             p_loss = d_criterion(p_decision, Variable(torch.Tensor(label_batch)))
             p_loss.backward()
             p_optimizer.step()
+
+        # ===================log========================
+        print('epoch [{}/{}], loss:{:.4f}'
+              .format(epoch + 1, pretrain_epochs, p_loss.data[0]))
+        if epoch % 10 == 0:
+            pic = to_img(output.cpu().data)
+            save_image(pic, './mlp_img/image_{}.png'.format(epoch))
+
 
 
     for epoch in range(num_epochs):
@@ -341,8 +352,8 @@ def train():
             #*********************************
             # y_optimizer.zero_grad()
             #
-            # class = D_pretrained(sentence)
-            # loss_style = criterion()
+            # style_decision = D_pretrained(sentence)
+            # loss_style =
             # loss_style.backward()
             #
             # y_optimizer.step()
