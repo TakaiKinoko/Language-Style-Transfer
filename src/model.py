@@ -175,7 +175,7 @@ class Discriminator(nn.Module):
 
 
 def train():
-    batch_size = 32
+    batch_size = 2
     num_epochs = 100
 
     d_learning_rate = 1e-3
