@@ -73,28 +73,17 @@ class StyleEncoder(nn.Module):
         #if self.args.static:   # baseline model with only a static channel
         #    x = Variable(x)
 
-        print("((((((((((1))))))))))")
-        print(x.shape)
         x = x.unsqueeze(1)  # (N, Ci, W, D)
-        print("((((((((((2))))))))))")
-        print(x.shape)
+
         x = [F.relu(conv(x)).squeeze(3) for conv in self.convs1]  # [(N, Co, W), ...]*len(Ks)
-        print("((((((((((3))))))))))")
-        for i in x:
-            print(i.shape)
+
         x = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x]  # [(N, Co), ...]*len(Ks)
         # x = [i.permute(0,2,1) for i in x]
-        print("((((((((((4))))))))))")
-        for i in x:
-            print(i.shape)
 
         x = torch.cat(x, 1)
-        print("((((((((((5))))))))))")
-        print(x.shape)
+
         x = self.dropout(x)  # (N, len(Ks)*Co)
         #logit = self.fc1(x)  # (N, C)
-        print("((((((((((6))))))))))")
-        print(x.shape)
         return x  #logit
 
 
@@ -175,7 +164,7 @@ class Discriminator(nn.Module):
 
 
 def train():
-    batch_size = 2
+    batch_size = 1
     num_epochs = 100
 
     d_learning_rate = 1e-3
@@ -191,6 +180,7 @@ def train():
     emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     Embed = EmbeddingLayer(vocab_len, emb_vecs).to(device)
     Ez = ContentEncoder().to(device)
@@ -211,9 +201,7 @@ def train():
     y_optimizer = optim.Adam(Ey.parameters(), lr=y_learning_rate, weight_decay=y_weight_decay)
     p_optimizer = optim.SGD(D_pretrained.parameters(), lr=d_learning_rate, momentum=d_momentum)
 
-
     pretrain_loader, train_loader_source, train_loader_target = load_data(batch_size)
-
 
     np.random.seed(seed=42)
     y_target = torch.Tensor(np.random.rand(500))
@@ -223,13 +211,14 @@ def train():
 
     gen_start_vector = torch.Tensor(np.random.rand(200)).to(device)
 
+
     for epoch in range(num_epochs):
         g_optimizer.zero_grad()
         for sentence_batch, label_batch in train_loader_source:
             Ez_h = Ez.init_hidden(20, device)
             indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
             X = Variable(torch.from_numpy(indices).long()).to(device)
-            X_vec = Embed(X)
+            X_vec = Embed(X).detach()
             # ===================forward=====================
             z = Ez(X_vec, Ez_h)
             y = Ey(X_vec)
@@ -278,10 +267,10 @@ def train():
             G_h = G.init_hidden(20, device)
             indices = sentences_to_indices(np.array(target_batch), word_to_index, 20)
             x_indices = Variable(torch.from_numpy(indices).long())
-            x_target = Embed(x_indices)
+            x_target = Embed(x_indices).detach()
 
-            z_target = Ez(x_target, Ez_h)
-            x_target_gen,_ = G(z_target, y_target, G_h)
+            z_target = Ez(x_target, Ez_h).detach()
+            x_target_gen,_ = G(z_target, y_target, G_h).detach()
             d_target_decision = D(x_target_gen)
 
             d_target_loss = d_criterion(d_target_decision, Variable(torch.ones([1,1]))) #ones = target
@@ -294,10 +283,10 @@ def train():
             G_h = G.init_hidden(20, device)
             indices = sentences_to_indices(np.array(source_batch), word_to_index, 20)
             x_indices = Variable(torch.from_numpy(indices).long())
-            x_source = Embed(x_indices)
+            x_source = Embed(x_indices).detach()
 
-            z_source = Ez(x_source, Ez_h)
-            x_source_gen,_ = G(z_source, y_target, G_h)
+            z_source = Ez(x_source, Ez_h).detach()
+            x_source_gen,_ = G(z_source, y_target, G_h).detach()
             d_source_decision = D(x_source_gen)
 
             d_source_loss = d_criterion(d_source_decision, Variable(torch.zeros([1,1]))) #zeros = source
@@ -308,7 +297,7 @@ def train():
 
 
             #*********************************
-            #TRAIN GENERATOR
+            #TRAIN GENERATOR AND ENCODERS
             #*********************************
             g_optimizer.zero_grad()
 
@@ -357,9 +346,6 @@ def train():
             # loss_style.backward()
             #
             # y_optimizer.step()
-
-
-
 
 
         # ===================log========================
