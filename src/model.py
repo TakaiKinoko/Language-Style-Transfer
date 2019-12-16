@@ -6,6 +6,8 @@ from torch import nn
 import torch.nn.functional as F
 import torch.optim as optim
 from preprocessing import load_data, read_glove_vecs, pretrained_embedding_layer, sentences_to_indices
+from torch.utils.tensorboard import SummaryWriter
+
 
 X_dim = 0
 N = 0
@@ -189,6 +191,9 @@ def train():
     D = Discriminator().to(device)
     D_pretrained = Discriminator().to(device)
 
+    writer = SummaryWriter()
+    # writer.add_graph(G)
+
     criterion = nn.MSELoss()
     d_criterion = nn.BCELoss()
     cycle_criterion = nn.MSELoss()
@@ -239,6 +244,8 @@ def train():
         if epoch % 10 == 0:
             pic = to_img(output.cpu().data)
             save_image(pic, './mlp_img/image_{}.png'.format(epoch))
+        writer.add_scalar('loss/train', loss, epoch)
+        writer.add_graph(G)
 
 
 
