@@ -11,6 +11,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 X_dim = 0
 N = 0
+embedding_dim = 50
+style_dim = 50
+content_dim = 100
+concat_dim = content_dim + style_dim
+batch_size = 1
 
 class EmbeddingLayer(nn.Module):
     '''
@@ -20,7 +25,8 @@ class EmbeddingLayer(nn.Module):
         pretrained_vectors: matrix of word embeddings
         input_dim: embeddings dimension
     '''
-    def __init__(self, vocab_size, pretrained_vectors, input_dim=200):
+    #def __init__(self, vocab_size, pretrained_vectors, input_dim=200):
+    def __init__(self, vocab_size, pretrained_vectors, input_dim=embedding_dim):
         super(EmbeddingLayer, self).__init__()
         self.embed = nn.Embedding(vocab_size, input_dim)
         pretrained_vectors = np.array(pretrained_vectors)
@@ -51,7 +57,8 @@ class StyleEncoder(nn.Module):
     GPU dropout probability: 0.5
     filter size: 200 * {1, 2, 3, 4, 5} with 100 feature maps each
     '''
-    def __init__(self, input_dim=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
+    #def __init__(self, input_dim=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
+    def __init__(self, input_dim=embedding_dim, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
         '''
         input_dim: embeddings dimension
         C: number of classes
@@ -98,7 +105,8 @@ class ContentEncoder(nn.Module):
         Dropout rate: 0.5
     The last hidden state of the GRU E_z is used as the content representation.
     '''
-    def __init__(self, input_dim=200, hidden_dim=1000, n_layers=1, drop_rate=0.5):
+    #def __init__(self, input_dim=200, hidden_dim=1000, n_layers=1, drop_rate=0.5):
+    def __init__(self, input_dim=embedding_dim, hidden_dim=content_dim, n_layers=1, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
@@ -126,7 +134,8 @@ class Generator(nn.Module):
     The last hidden state of the GRU G is used as the reconstructed word embedding.
     '''
     #def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
-    def __init__(self, input_dim=200, hidden_dim=1500, n_layers=1, drop_rate=0.5):
+    #def __init__(self, input_dim=200, hidden_dim=1500, n_layers=1, drop_rate=0.5):
+    def __init__(self, input_dim=embedding_dim, hidden_dim=(concat_dim), n_layers=1, drop_rate=0.5):
         super(Generator, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
@@ -135,12 +144,14 @@ class Generator(nn.Module):
     def forward(self, z, y, start):
         first_hidden =  torch.cat((z, y), 1) # shape: (32, 1500) -- first hidden state
 
-        for i in range(32):
+        #for i in range(32):
+        for i in range(batch_size):
             start = torch.stack((start, start))
         print("Generator----------------- stacked input tensor ------")
         print(start)
 
-        out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
+        #out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
+        out, h = self.gru(start.view(1, batch_size, embedding_dim), first_hidden.view(1, batch_size, concat_dim))
         #out, h = self.gru(out,h)
         return out, h
 
@@ -155,7 +166,8 @@ class Discriminator(nn.Module):
     return 1 if input is from target dataset
     return 0 if input if from source dataset
     """
-    def __init__(self, input_dim=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
+    # def __init__(self, input_dim=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
+    def __init__(self, input_dim=embedding_dim, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
         super(Discriminator, self).__init__()
         self.cnn = StyleEncoder(input_dim=input_dim, C=C, Ci=Ci, Co=Co, Ks=Ks, dropout=dropout)
 
@@ -209,13 +221,15 @@ def train():
     pretrain_loader, train_loader_source, train_loader_target = load_data(batch_size)
 
     np.random.seed(seed=42)
-    y_target = torch.Tensor(np.random.rand(500))
+    #y_target = torch.Tensor(np.random.rand(500))
+    y_target = torch.Tensor(np.random.rand(style_dim))
     y_target = y_target.unsqueeze(-1)
-    y_target = y_target.expand(500, 32) #expand to 32 dimensions
+    #y_target = y_target.expand(500, 32) #expand to 32 dimensions
+    y_target = y_target.expand(style_dim, batch_size) #expand to 32 dimensions
     y_target = y_target.transpose(1, 0).to(device)
 
-    gen_start_vector = torch.Tensor(np.random.rand(200)).to(device)
-
+    #gen_start_vector = torch.Tensor(np.random.rand(200)).to(device)
+    gen_start_vector = torch.Tensor(np.random.rand(embedding_dim)).to(device)
 
     #--------------------------------------
     #TEMPORARY TEST OF RECONSTRUCTION LOSS
