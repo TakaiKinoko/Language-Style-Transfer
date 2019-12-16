@@ -115,7 +115,7 @@ class ContentEncoder(nn.Module):
 
     def forward(self, x, h):
         out, h = self.gru(x, h)
-        return out, h
+        return out[:,-1,:]
 
     def init_hidden(self, batch_size, device):
         weight = next(self.parameters()).data
@@ -127,40 +127,36 @@ class Generator(nn.Module):
     '''
     A GRU net as the generator G.
     Parameters:
-        Input_dimension: 1500, dimension of concat(content_representation, style_representation).
-        Hidden_dimension: 200, dimension of the word embedding.
+        #Input_dimension: 1500, dimension of concat(content_representation, style_representation).
+        Hidden_dimension: 1500, dimension of concat(content_representation, style_representation).
+        #Hidden_dimension: 200, dimension of the word embedding.
+        Input_dimension: 200, dimension of the word embedding.
         Dropout rate: 0.5
     The last hidden state of the GRU G is used as the reconstructed word embedding.
     '''
-    def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
+    #def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
+    def __init__(self, input_dim=200, hidden_dim=1500, n_layers=1, drop_rate=0.5):
         super(Generator, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
-    def forward_step(input, hidden):
-        """Perform a single decoder step (1 word)"""
-        return self.gru(input, hidden)
+    def forward(self, z, y, start):
+        first_hidden =  torch.cat((z, y), 1) # shape: (32, 1500) -- first hidden state
 
-    def forward(self, start_vec, first_hidden, max_len=20):
-        """Unroll the decoder one step at a time."""
-        output = []
+        for i in range(32):
+            start = torch.stack((start, start))
+        print("Generator----------------- stacked input tensor ------")
+        print(start)
 
-        input = start_vec
-        hidden = first_hidden
-        for i in range(max_len):
-            #out, h = self.forward_step(input, hidden)
-            out, h = self.gru(input, hidden)
-            input = out
-            hidden = h
-            output.append(out)
+        out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
+        #out, h = self.gru(out,h)
+        return out, h
 
-        return output
-
-    def init_hidden(self, z, y):
-        first_hidden =  torch.cat((z, y), 1)
-        return first_hidden
-        #return torch.tanh(self.bridge(encoder_final))
+    def init_hidden(self, batch_size, device):
+        weight = next(self.parameters()).data
+        hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
+        return hidden
 
 
 class Discriminator(nn.Module):
@@ -181,8 +177,6 @@ class Discriminator(nn.Module):
 def train():
     batch_size = 32
     num_epochs = 100
-    d_steps = 20
-    g_steps = 20
 
     d_learning_rate = 1e-3
     g_learning_rate = 1e-3
@@ -203,7 +197,6 @@ def train():
     D = Discriminator()
     D_pretrained = Discriminator()
 
-
     criterion = nn.MSELoss()
     d_criterion = nn.BCELoss()
     cycle_criterion = nn.MSELoss()
@@ -215,63 +208,57 @@ def train():
                 ], lr=g_learning_rate, weight_decay=g_weight_decay)
     y_optimizer = optim.Adam(Ey.parameters(), lr=y_learning_rate, weight_decay=y_weight_decay)
 
-    _, train_loader_source, train_loader_target = load_data(batch_size)
+    pretrain_loader, train_loader_source, train_loader_target = load_data(batch_size)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    #TODO: Generate random seed, so that y_target is the same every time
+    np.random.seed(seed=42)
     y_target = torch.Tensor(np.random.rand(500))
     y_target = y_target.unsqueeze(-1)
     y_target = y_target.expand(500, 32) #expand to 32 dimensions
-    y_target = y_target.transpose(1, 0) #expand to 32 dimensions
+    y_target = y_target.transpose(1, 0)
 
     gen_start_vector = torch.Tensor(np.random.rand(200))
 
     for epoch in range(num_epochs):
-        for g in range(g_steps):
+        g_optimizer.zero_grad()
+        for sentence_batch, label_batch in train_loader_source:
+            Ez_h = Ez.init_hidden(20, device)
+            indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
+            X = Variable(torch.from_numpy(indices).long())
+            X_vec = Embed(X)
+            # ===================forward=====================
+            z = Ez(X_vec, Ez_h)
+            y = Ey(X_vec)
+            output, _ = G(z, y, gen_start_vector)
+
+            loss = criterion(output, X_vec)
+            # ===================backward====================
             g_optimizer.zero_grad()
-            for sentence_batch, label_batch in train_loader_source:
+            loss.backward()
+            g_optimizer.step()
 
-                # Ez_h = Ez.init_hidden(batch_size, device)
-                # G_h = G.init_hidden(batch_size, device)
-                Ez_h = Ez.init_hidden(20, device)
-
-                indices = sentences_to_indices(np.array(sentence_batch), word_to_index, 20)
-                X = Variable(torch.from_numpy(indices).long())
-                X_vec = Embed(X)
-
-                print("Hidden--------------------------")
-                print(Ez_h.shape)
-                print("Input--------------------------")
-                print(X_vec.shape)
-
-                # ===================forward=====================
-                out,h = Ez(X_vec, Ez_h)
-                z = out[:,-1,:]
-                print("content--------------------------")
-                print(z.shape)
-
-                y = Ey(X_vec)
-
-                print("style--------------------------")
-                print(y.shape)
-                print(y)
-
-                latent_rep = G.init_hidden(z, y)
-                output, _ = G(gen_start_vector, latent_rep)
-                loss = criterion(output, X_vec)
-
-                print("output--------------------------")
-                print(output.shape)
-                print("input--------------------------")
-                print(X_vec.shape)
-
-                # ===================backward====================
-                g_optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+        # ===================log========================
+        print('epoch [{}/{}], loss:{:.4f}'
+              .format(epoch + 1, num_epochs, loss.data[0]))
+        if epoch % 10 == 0:
+            pic = to_img(output.cpu().data)
+            save_image(pic, './mlp_img/image_{}.png'.format(epoch))
 
 
+
+    #*********************************
+    #TRAIN STYLE DISCREPANCY DISCRIMINATOR
+    #*********************************
+    # pretrain_epochs = 10
+    # for epoch in range(pretrain_epochs):
+    #     for sentence_batch, label_batch in pretrain_loader:
+    #         D_pretrained()
+    #         if label_batch
+    #         print(label_batch.shape)
+    #         d_target_loss = d_criterion(d_target_decision, Variable(torch.Tensor(label_batch))) #ones = target
+    #
+    #         loss = d_criterion()
 
 
     for epoch in range(num_epochs):
@@ -290,7 +277,7 @@ def train():
             x_indices = Variable(torch.from_numpy(indices).long())
             x_target = Embed(x_indices)
 
-            z_target,_ = Ez(x_target, Ez_h)
+            z_target = Ez(x_target, Ez_h)
             x_target_gen,_ = G(z_target, y_target, G_h)
             d_target_decision = D(x_target_gen)
 
@@ -306,7 +293,7 @@ def train():
             x_indices = Variable(torch.from_numpy(indices).long())
             x_source = Embed(x_indices)
 
-            z_source,_ = Ez(x_source, Ez_h)
+            z_source = Ez(x_source, Ez_h)
             x_source_gen,_ = G(z_source, y_target, G_h)
             d_source_decision = D(x_source_gen)
 
@@ -331,7 +318,7 @@ def train():
             X = Variable(torch.from_numpy(indices).long())
             X_vec = Embed(X)
 
-            z,_ = Ez(X_vec, Ez_h)
+            z = Ez(X_vec, Ez_h)
             y = Ey(X_vec)
             x_reconstructed,_ = G(z, y, G_h)
 
@@ -360,13 +347,13 @@ def train():
             #*********************************
             #TRAIN STYLE ENCODER
             #*********************************
-            y_optimizer.zero_grad()
-
-            class = D_pretrained(sentence)
-            loss_style = criterion()
-            loss_style.backward()
-
-            y_optimizer.step()
+            # y_optimizer.zero_grad()
+            #
+            # class = D_pretrained(sentence)
+            # loss_style = criterion()
+            # loss_style.backward()
+            #
+            # y_optimizer.step()
 
 
 
