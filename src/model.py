@@ -127,20 +127,29 @@ class Generator(nn.Module):
     '''
     A GRU net as the generator G.
     Parameters:
-        Input_dimension: 1500, dimension of concat(content_representation, style_representation).
-        Hidden_dimension: 200, dimension of the word embedding.
+        #Input_dimension: 1500, dimension of concat(content_representation, style_representation).
+        Hidden_dimension: 1500, dimension of concat(content_representation, style_representation).
+        #Hidden_dimension: 200, dimension of the word embedding.
+        Input_dimension: 200, dimension of the word embedding.
         Dropout rate: 0.5
     The last hidden state of the GRU G is used as the reconstructed word embedding.
     '''
-    def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
+    #def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
+    def __init__(self, input_dim=200, hidden_dim=1500, n_layers=1, drop_rate=0.5):
         super(Generator, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
 
     def forward(self, z, y, start):
-        first_hidden =  torch.cat((z, y), 1)
-        out, h = self.gru(start,first_hidden)
+        first_hidden =  torch.cat((z, y), 1) # shape: (32, 1500) -- first hidden state
+
+        for i in range(32):
+            start = torch.stack((start, start))
+        print("Generator----------------- stacked input tensor ------")
+        print(start)
+
+        out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
         #out, h = self.gru(out,h)
         return out, h
 
@@ -211,6 +220,7 @@ def train():
     y_target = y_target.transpose(1, 0) #expand to 32 dimensions
 
     gen_start_vector = torch.Tensor(np.random.rand(200))
+    #gen_start_vector = torch.Tensor(np.random.rand(1500))
 
     for epoch in range(num_epochs):
         for g in range(g_steps):
@@ -247,6 +257,9 @@ def train():
                 # ^^ these need to be the same number of dimensions for the torch.cat to work *****
 
                 output, _ = G(z, y, gen_start_vector)
+                print("Generator output --------------------------")
+                print(output)
+
                 loss = criterion(output, X_vec)
 
                 print("output--------------------------")
