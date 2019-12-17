@@ -14,8 +14,9 @@ N = 0
 embedding_dim = 50
 style_dim = 50
 content_dim = 100
-concat_dim = content_dim + style_dim
+concat_dim = content_dim + style_dim*5
 batch_size = 1
+sentence_len = 20
 
 class EmbeddingLayer(nn.Module):
     '''
@@ -58,7 +59,7 @@ class StyleEncoder(nn.Module):
     filter size: 200 * {1, 2, 3, 4, 5} with 100 feature maps each
     '''
     #def __init__(self, input_dim=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
-    def __init__(self, input_dim=embedding_dim, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
+    def __init__(self, input_dim=embedding_dim, C=2, Ci=1, Co=style_dim, Ks=[1, 2, 3, 4, 5], dropout=0.5):
         '''
         input_dim: embeddings dimension
         C: number of classes
@@ -145,15 +146,26 @@ class Generator(nn.Module):
         first_hidden =  torch.cat((z, y), 1) # shape: (32, 1500) -- first hidden state
 
         #for i in range(32):
-        for i in range(batch_size):
-            start = torch.stack((start, start))
+        # if batch_size != 1:
+        #     for i in range(batch_size):
+        #         start = torch.stack((start, start))
         print("Generator----------------- stacked input tensor ------")
+        print(start.shape)
         print(start)
 
         #out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
-        out, h = self.gru(start.view(1, batch_size, embedding_dim), first_hidden.view(1, batch_size, concat_dim))
+        generated_sentence =[]
+
+        input = start.view(1, batch_size, embedding_dim)
+        hidden = first_hidden.view(1, batch_size, concat_dim)
+        for i in range(sentence_len):
+            out, h = self.gru(input, hidden)
+            input = out
+            hidden = h
+            generated_sentence.append(out)
         #out, h = self.gru(out,h)
-        return out, h
+
+        return generated_sentence,h
 
     def init_hidden(self, batch_size, device):
         weight = next(self.parameters()).data
@@ -188,10 +200,10 @@ def train():
     g_weight_decay = 1e-5
     y_weight_decay = 1e-5
 
-    glove_file = '../data/glove.6B/glove.6B.200d.txt'
+    glove_file = '../data/glove.6B/glove.6B.' + str(embedding_dim) + 'd.txt'
     word_to_index, index_to_word, word_to_vec_map = read_glove_vecs(glove_file)
     vocab_len = len(word_to_index) + 1
-    emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index)
+    emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index, emb_dim=embedding_dim)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device = torch.device("cpu")
