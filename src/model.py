@@ -136,11 +136,12 @@ class Generator(nn.Module):
     '''
     #def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
     #def __init__(self, input_dim=200, hidden_dim=1500, n_layers=1, drop_rate=0.5):
-    def __init__(self, input_dim=embedding_dim, hidden_dim=(concat_dim), n_layers=1, drop_rate=0.5):
+    def __init__(self, input_dim=concat_dim, hidden_dim=concat_dim, n_layers=1, drop_rate=0.5):
         super(Generator, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.gru = nn.GRU(input_dim, hidden_dim, dropout=drop_rate)
+        self.fc = nn.Linear(concat_dim, embedding_dim)
 
     def forward(self, z, y, start):
         first_hidden =  torch.cat((z, y), 1) # shape: (32, 1500) -- first hidden state
@@ -149,23 +150,22 @@ class Generator(nn.Module):
         # if batch_size != 1:
         #     for i in range(batch_size):
         #         start = torch.stack((start, start))
-        print("Generator----------------- stacked input tensor ------")
-        print(start.shape)
-        print(start)
+
 
         #out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
         generated_sentence =[]
+        output_seq = torch.zeros(1, batch_size, sentence_len, concat_dim)
 
-        input = start.view(1, batch_size, embedding_dim)
+        input = start.view(1, batch_size, concat_dim)
         hidden = first_hidden.view(1, batch_size, concat_dim)
         for i in range(sentence_len):
             out, h = self.gru(input, hidden)
             input = out
             hidden = h
-            generated_sentence.append(out)
-        #out, h = self.gru(out,h)
+            output_seq[:,:,i,:] = out
 
-        return generated_sentence,h
+        smaller_output_seq = self.fc(output_seq)
+        return smaller_output_seq
 
     def init_hidden(self, batch_size, device):
         weight = next(self.parameters()).data
@@ -241,7 +241,7 @@ def train():
     y_target = y_target.transpose(1, 0).to(device)
 
     #gen_start_vector = torch.Tensor(np.random.rand(200)).to(device)
-    gen_start_vector = torch.Tensor(np.random.rand(embedding_dim)).to(device)
+    gen_start_vector = torch.Tensor(np.random.rand(concat_dim)).to(device)
 
     #--------------------------------------
     #TEMPORARY TEST OF RECONSTRUCTION LOSS
@@ -256,7 +256,7 @@ def train():
             # ===================forward=====================
             z = Ez(X_vec, Ez_h)
             y = Ey(X_vec)
-            output, _ = G(z, y, gen_start_vector)
+            output = G(z, y, gen_start_vector)
 
             loss = criterion(output, X_vec)
             # ===================backward====================
@@ -314,7 +314,7 @@ def train():
             x_target = Embed(x_indices).detach()
 
             z_target = Ez(x_target, Ez_h).detach()
-            x_target_gen,_ = G(z_target, y_target, G_h).detach()
+            x_target_gen = G(z_target, y_target, G_h).detach()
             d_target_decision = D(x_target_gen)
 
             d_target_loss = d_criterion(d_target_decision, Variable(torch.ones([1,1]))) #ones = target
@@ -330,7 +330,7 @@ def train():
             x_source = Embed(x_indices).detach()
 
             z_source = Ez(x_source, Ez_h).detach()
-            x_source_gen,_ = G(z_source, y_target, G_h).detach()
+            x_source_gen = G(z_source, y_target, G_h).detach()
             d_source_decision = D(x_source_gen)
 
             d_source_loss = d_criterion(d_source_decision, Variable(torch.zeros([1,1]))) #zeros = source
@@ -356,7 +356,7 @@ def train():
 
             z = Ez(X_vec, Ez_h)
             y = Ey(X_vec)
-            x_reconstructed,_ = G(z, y, G_h)
+            x_reconstructed = G(z, y, G_h)
 
             loss_reconstruction = criterion(x_reconstructed, X_vec)
             loss_reconstruction.backward()
