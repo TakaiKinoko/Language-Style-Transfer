@@ -8,7 +8,6 @@ import torch.optim as optim
 from preprocessing import load_data, read_glove_vecs, pretrained_embedding_layer, sentences_to_indices
 from torch.utils.tensorboard import SummaryWriter
 
-
 X_dim = 0
 N = 0
 embedding_dim = 50
@@ -26,7 +25,6 @@ class EmbeddingLayer(nn.Module):
         pretrained_vectors: matrix of word embeddings
         input_dim: embeddings dimension
     '''
-    #def __init__(self, vocab_size, pretrained_vectors, input_dim=200):
     def __init__(self, vocab_size, pretrained_vectors, input_dim=embedding_dim):
         super(EmbeddingLayer, self).__init__()
         self.embed = nn.Embedding(vocab_size, input_dim)
@@ -34,14 +32,7 @@ class EmbeddingLayer(nn.Module):
         self.embed.weight.data.copy_(torch.from_numpy(pretrained_vectors))
         self.embed.weight.requires_grad=False
 
-        # self.word_to_index = word_to_index
-
     def forward(self, word_index):
-
-        # break string up
-        # make a size 20 vector
-        # for each vector put average
-        # for word in
         word_vector = self.embed(word_index)
         return word_vector
 
@@ -56,7 +47,6 @@ class StyleEncoder(nn.Module):
     GPU dropout probability: 0.5
     filter size: 200 * {1, 2, 3, 4, 5} with 100 feature maps each
     '''
-    #def __init__(self, input_dim=200, C=2, Ci=1, Co=100, Ks=[1, 2, 3, 4, 5], dropout=0.5):
     def __init__(self, input_dim=embedding_dim, C=2, Ci=1, Co=style_dim, Ks=[1, 2, 3, 4, 5], dropout=0.5):
         '''
         input_dim: embeddings dimension
@@ -104,7 +94,6 @@ class ContentEncoder(nn.Module):
         Dropout rate: 0.5
     The last hidden state of the GRU E_z is used as the content representation.
     '''
-    #def __init__(self, input_dim=200, hidden_dim=1000, n_layers=1, drop_rate=0.5):
     def __init__(self, input_dim=embedding_dim, hidden_dim=content_dim, n_layers=1, drop_rate=0.5):
         super(ContentEncoder, self).__init__()
         self.hidden_dim = hidden_dim
@@ -132,8 +121,6 @@ class Generator(nn.Module):
         Dropout rate: 0.5
     The last hidden state of the GRU G is used as the reconstructed word embedding.
     '''
-    #def __init__(self, input_dim=1500, hidden_dim=200, n_layers=1, drop_rate=0.5):
-    #def __init__(self, input_dim=200, hidden_dim=1500, n_layers=1, drop_rate=0.5):
     def __init__(self, input_dim=concat_dim, hidden_dim=concat_dim, n_layers=1, drop_rate=0.5):
         super(Generator, self).__init__()
         self.hidden_dim = hidden_dim
@@ -144,14 +131,6 @@ class Generator(nn.Module):
     def forward(self, z, y, start):
         first_hidden =  torch.cat((z, y), 1) # shape: (32, 1500) -- first hidden state
 
-        #for i in range(32):
-        # if batch_size != 1:
-        #     for i in range(batch_size):
-        #         start = torch.stack((start, start))
-
-
-        #out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
-        generated_sentence =[]
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         output_seq = torch.zeros(1, batch_size, sentence_len, concat_dim).to(device)
 
@@ -178,7 +157,6 @@ class Discriminator(nn.Module):
     return 1 if input is from target dataset
     return 0 if input if from source dataset
     """
-    # def __init__(self, input_dim=200, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
     def __init__(self, input_dim=embedding_dim, C=2, Ci=1, Co=250, Ks=[2, 3, 4, 5], dropout=0.5):
         super(Discriminator, self).__init__()
         self.cnn = StyleEncoder(input_dim=input_dim, C=C, Ci=Ci, Co=Co, Ks=Ks, dropout=dropout)
@@ -213,7 +191,6 @@ def train():
     emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index, emb_dim=embedding_dim)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #device = torch.device("cuda")
 
     Embed = EmbeddingLayer(vocab_len, emb_vecs).to(device)
     Ez = ContentEncoder().to(device)
@@ -223,7 +200,6 @@ def train():
     D_pretrained = Discriminator().to(device)
 
     writer = SummaryWriter()
-    # writer.add_graph(G)
 
     criterion = nn.MSELoss()
     d_criterion = nn.BCELoss()
@@ -240,15 +216,13 @@ def train():
     pretrain_loader, train_loader_source, train_loader_target = load_data(batch_size)
 
     np.random.seed(seed=42)
-    #y_target = torch.Tensor(np.random.rand(500))
     y_target = torch.Tensor(np.random.rand(style_dim))
     y_target = y_target.unsqueeze(-1)
-    #y_target = y_target.expand(500, 32) #expand to 32 dimensions
     y_target = y_target.expand(style_dim, batch_size) #expand to 32 dimensions
     y_target = y_target.transpose(1, 0).to(device)
 
-    #gen_start_vector = torch.Tensor(np.random.rand(200)).to(device)
     gen_start_vector = torch.Tensor(np.random.rand(concat_dim)).to(device)
+
 
     #--------------------------------------
     #TEMPORARY TEST OF RECONSTRUCTION LOSS
@@ -281,7 +255,6 @@ def train():
         writer.add_graph(G)
 
 
-
     #**************************************
     #TRAIN STYLE DISCREPANCY DISCRIMINATOR
     #**************************************
@@ -303,7 +276,9 @@ def train():
             save_image(pic, './mlp_img/image_{}.png'.format(epoch))
 
 
-
+    #**************************************
+    #MAIN TRAINING LOOP
+    #**************************************
     for epoch in range(num_epochs):
         for ((source_batch,source_labels),(target_batch,_)) in zip(train_loader_source, train_loader_target):
 
@@ -327,7 +302,6 @@ def train():
             d_target_loss = d_criterion(d_target_decision, Variable(torch.ones([1,1]))) #ones = target
             d_target_loss.backward()
 
-
             #SOURCE SENTENCES
             #train D to recognize sentences generated from source data
             Ez_h = Ez.init_hidden(20, device)
@@ -337,7 +311,7 @@ def train():
             x_source = Embed(x_indices).detach()
 
             z_source = Ez(x_source, Ez_h).detach()
-            x_source_gen = G(z_source, y_target, G_h).detach()
+            x_source_gen = G(z_source, y_target, G_h)
             d_source_decision = D(x_source_gen)
 
             d_source_loss = d_criterion(d_source_decision, Variable(torch.zeros([1,1]))) #zeros = source
@@ -369,7 +343,7 @@ def train():
             loss_reconstruction.backward()
 
             #CYCLE CONSISTENCY LOSS
-            z_cycle = Ez(x_reconstructed)
+            z_cycle = Ez(x_source_gen)
             y_cycle = Ey(x_source)
             x_cycle = G(z_cycle, y_cycle)
 
@@ -380,7 +354,7 @@ def train():
             #train G to generate sentences from source that fool the discriminator
             d_fake_decision = D(x_source)
 
-            generator_loss = d_criterion(d_fake_decision, Variable(torch,ones([1,1])))
+            generator_loss = d_criterion(d_fake_decision, Variable(torch.ones([1,1])))
             generator_loss.backward()
 
             #update weights
@@ -390,6 +364,7 @@ def train():
             #*********************************
             #TRAIN STYLE ENCODER
             #*********************************
+            ##Style Discrepancy Loss
             # y_optimizer.zero_grad()
             #
             # style_decision = D_pretrained(sentence)
@@ -397,7 +372,6 @@ def train():
             # loss_style.backward()
             #
             # y_optimizer.step()
-
 
         # ===================log========================
         print('epoch [{}/{}], loss:{:.4f}'
