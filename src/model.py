@@ -152,7 +152,8 @@ class Generator(nn.Module):
 
         #out, h = self.gru(start.view(1, 32, 200), first_hidden.view(1, 32, 1500))
         generated_sentence =[]
-        output_seq = torch.zeros(1, batch_size, sentence_len, concat_dim)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        output_seq = torch.zeros(1, batch_size, sentence_len, concat_dim).to(device)
 
         input = start.view(1, batch_size, concat_dim)
         hidden = first_hidden.view(1, batch_size, concat_dim)
@@ -189,6 +190,13 @@ class Discriminator(nn.Module):
 
 
 def train():
+    if torch.cuda.is_available():
+        print("CUDA available\n")
+
+    a = torch.cuda.FloatTensor([1.])
+    print(a)
+    print("\n")
+
     batch_size = 1
     num_epochs = 100
 
@@ -205,7 +213,7 @@ def train():
     emb_vecs = pretrained_embedding_layer(word_to_vec_map, word_to_index, emb_dim=embedding_dim)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #device = torch.device("cpu")
+    #device = torch.device("cuda")
 
     Embed = EmbeddingLayer(vocab_len, emb_vecs).to(device)
     Ez = ContentEncoder().to(device)
