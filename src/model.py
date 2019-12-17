@@ -42,8 +42,6 @@ class EmbeddingLayer(nn.Module):
         # make a size 20 vector
         # for each vector put average
         # for word in
-        print("*****************************************")
-        print(word_index.shape)
         word_vector = self.embed(word_index)
         return word_vector
 
@@ -164,7 +162,8 @@ class Generator(nn.Module):
             hidden = h
             output_seq[:,:,i,:] = out
 
-        smaller_output_seq = self.fc(output_seq)
+        seq = self.fc(output_seq)
+        smaller_output_seq = seq.view(batch_size, sentence_len, embedding_dim)
         return smaller_output_seq
 
     def init_hidden(self, batch_size, device):
@@ -283,7 +282,7 @@ def train():
         for sentence_batch, label_batch in pretrain_loader:
             p_optimizer.zero_grad()
             p_decision = D_pretrained(sentence_batch)
-            print(label_batch.shape)
+            #print(label_batch.shape)
             p_loss = d_criterion(p_decision, Variable(torch.Tensor(label_batch)))
             p_loss.backward()
             p_optimizer.step()
