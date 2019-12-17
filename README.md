@@ -1,4 +1,4 @@
-# Language-Style-Transfer-with-BERT
+# Language-Style-Transfer
 Final Project for Statistical NLP (Fall 19) @NYU
 
 
